@@ -1,54 +1,57 @@
-node {
+pipeline {
+   agent any
 
-   stage 'checkout'
+   environment {
+     // You must set the following environment variables
+     ORGANIZATION_NAME = "gopac25"
+     YOUR_DOCKERHUB_USERNAME = "gopac"
 
-   // Get some code from a GitHub repository
-   git url: 'https://github.com/gopac25/webapp1.git'
-   sh 'git clean -fdx; sleep 4;'
+     SERVICE_NAME = "testwebapp"
+     registry="${YOUR_DOCKERHUB_USERNAME}/${ORGANIZATION_NAME}-${SERVICE_NAME}:${BUILD_ID}"
+     //registry = "gopac/gopac"
+     registryCredential = 'dockerhub'
+     dockerImage = ''
+   }
 
-   // Get the maven tool.
-   // ** NOTE: This 'mvn' maven tool must be configured
-   // **       in the global configuration.
-   def mvnHome = tool 'M3'
-   
-   //stage('SonarQube analysis') {
-    //withSonarQubeEnv('sonar') {
-      // requires SonarQube Scanner for Maven 3.2+
-     // sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.2:sonar'
-   // }
- // }
-   stage 'clean'
-   sh "${mvnHome}/bin/mvn clean"
-   
-   stage 'compile'
-   sh "${mvnHome}/bin/mvn compile"
-   
-   stage 'sonar'
-   sh "${mvnHome}/bin/mvn sonar:sonar"
-   
-   stage 'build'
-   // set the version of the build artifact to the Jenkins BUILD_NUMBER so you can
-   // map artifacts to Jenkins builds
-   sh "${mvnHome}/bin/mvn versions:set -DnewVersion=${env.BUILD_NUMBER}"
-   sh "${mvnHome}/bin/mvn package"
-  
-   stage 'test'
-   parallel 'test': {
-     sh "${mvnHome}/bin/mvn test; sleep 2;"
-   }, 'verify': {
-     sh "${mvnHome}/bin/mvn verify; sleep 3"
+   stages {
+      stage('Preparation') {
+         steps {
+            cleanWs()
+            git credentialsId: 'GitHub', url: "https://github.com/${ORGANIZATION_NAME}/${SERVICE_NAME}"
+         }
+      }
+      stage('Build') {
+         steps {
+            sh '''mvn clean package'''
+         }
+      }
+
+      //stage('Build and Push Image') {
+        // steps {
+         // dockerImage = sh 'docker build -t ${REPOSITORY_TAG} .'
+          //  dockerImage = docker.build registry + ":${REPOSITORY_TAG}"
+     // }
+      //}
+    stage('Building image') {
+      steps{
+        script {
+          dockerImage = docker.build registry
+        }
+      }
+    }
+    stage('Deploy Image') {
+      steps{
+        script {
+          docker.withRegistry( '', registryCredential ) {
+            dockerImage.push()
+          }
+        }
+      }
+    }
+      //stage('Deploy to Cluster') {
+        //  steps {
+          //          sh 'envsubst < ${WORKSPACE}/deploy.yaml | kubectl apply -f -'
+          //}
+      //}}
    }
-   
-   stage 'junit' {
-      junit '**/target/surefire-reports/TEST-*.xml'
-      archive 'target/*.jar'
-   }
-   
-      stage('publishHTML') {
-      junit '**/target/surefire-reports/TEST-*.xml'
-      archive 'target/*.jar'
-   }
-   
-   stage 'deploy'
-   sh "${mvnHome}/bin/mvn deploy"
 }
