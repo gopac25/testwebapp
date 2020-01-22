@@ -6,6 +6,6 @@ EXPOSE 8080
 
 WORKDIR /usr/local/bin/
 
-COPY target/dev-v1.0 webapp
+COPY target/dev-v1.0.jar webapp.jar
 
-CMD ["java", "-Xmx50m","webapp"]
+CMD ["java", "-Xmx50m","-jar","webapp.jar"]
